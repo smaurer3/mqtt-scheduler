@@ -916,6 +916,14 @@ async function delMacroEntry(mid, eid) {
 }
 
 // --- Log ---
+function fmtLocalTime(s) {
+  if (!s) return '';
+  // SQLite datetime('now') is UTC with no timezone marker — append 'Z' so Date parses it as UTC.
+  const d = new Date(s.replace(' ', 'T') + 'Z');
+  if (isNaN(d)) return s;
+  return d.toLocaleString();
+}
+
 async function loadLog() {
   const rows = await fetch('/api/log?limit=100').then(r => r.json());
   const tbody = document.getElementById('logBody');
@@ -924,7 +932,7 @@ async function loadLog() {
     return;
   }
   tbody.innerHTML = rows.map(r => `<tr>
-    <td style="white-space:nowrap;font-size:12px">${r.fired_at || ''}</td>
+    <td style="white-space:nowrap;font-size:12px">${fmtLocalTime(r.fired_at)}</td>
     <td><strong>${x(r.scene_name || '')}</strong></td>
     <td class="${r.status === 'ok' ? 'ok' : 'err'}">${r.status}</td>
     <td class="mono">${x(r.note || '')}</td>
