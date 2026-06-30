@@ -1,0 +1,987 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MQTT Scheduler</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; background: #f0f2f5; color: #222; min-height: 100vh; }
+
+header {
+  background: #1a73e8;
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+header h1 { font-size: 17px; font-weight: 600; }
+.mqtt-badge {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  letter-spacing: 0.3px;
+  transition: background .3s;
+}
+.mqtt-badge.ok { background: #1e8e3e; color: #fff; }
+.mqtt-badge.err { background: #c5221f; color: #fff; }
+
+nav {
+  background: white;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  position: sticky;
+  top: 45px;
+  z-index: 40;
+}
+nav button {
+  padding: 11px 26px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #555;
+  border-bottom: 3px solid transparent;
+  transition: color .15s;
+}
+nav button.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
+nav button:hover:not(.active) { color: #333; background: #f8f8f8; }
+
+.tab { display: none; padding: 20px; max-width: 860px; margin: 0 auto; }
+.tab.active { display: block; }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity .15s, transform .1s;
+  white-space: nowrap;
+}
+.btn:active { transform: scale(0.97); }
+.btn:hover { opacity: 0.88; }
+.btn-primary { background: #1a73e8; color: white; }
+.btn-danger  { background: #d93025; color: white; }
+.btn-success { background: #1e8e3e; color: white; }
+.btn-muted   { background: #e8eaed; color: #444; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* Scene list */
+.scene-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.scene-card {
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: hidden;
+  border-left: 5px solid #1a73e8;
+}
+
+.scene-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+.scene-header:hover { background: #fafafa; }
+
+.scene-name { font-weight: 600; font-size: 15px; flex: 1; }
+.scene-desc { font-size: 12px; color: #888; margin-top: 2px; }
+
+.scene-btns { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+
+.scene-body { border-top: 1px solid #eee; padding: 14px; display: none; }
+.scene-body.open { display: block; }
+
+.chevron { font-size: 10px; color: #aaa; transition: transform .2s; }
+.chevron.open { transform: rotate(180deg); }
+
+/* Actions table */
+.actions-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.actions-table th {
+  text-align: left;
+  padding: 6px 8px;
+  background: #f6f8fa;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid #eaecef;
+  white-space: nowrap;
+}
+.actions-table td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+.actions-table tbody tr:last-child td { border-bottom: none; }
+.actions-table input[type=text],
+.actions-table input[type=number] {
+  width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-family: monospace;
+  background: white;
+}
+.actions-table input:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+.add-row td { background: #f0f7ff; }
+.add-row input { background: white; }
+
+/* Modal */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.overlay.open { display: flex; }
+.modal {
+  background: white;
+  border-radius: 10px;
+  padding: 24px;
+  width: 400px;
+  max-width: 95vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.modal h2 { font-size: 16px; margin-bottom: 18px; }
+
+.fg { margin-bottom: 14px; }
+.fg label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; font-weight: 600; }
+.fg input, .fg select {
+  width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+.fg input:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+.fg .color-row { display: flex; align-items: center; gap: 10px; }
+.fg input[type=color] {
+  width: 44px;
+  height: 38px;
+  padding: 2px 3px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+/* Log table */
+.log-wrap { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+.log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.log-table th {
+  text-align: left;
+  padding: 10px 12px;
+  background: #f6f8fa;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid #eaecef;
+}
+.log-table td { padding: 7px 12px; border-bottom: 1px solid #f0f0f0; }
+.log-table tbody tr:last-child td { border-bottom: none; }
+.log-table .mono { font-family: monospace; font-size: 11px; color: #888; }
+.ok  { color: #1e8e3e; font-weight: 600; }
+.err { color: #d93025; font-weight: 600; }
+
+/* Settings */
+.settings-card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 16px;
+}
+.settings-card h2 { font-size: 14px; font-weight: 700; color: #444; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: #333;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  z-index: 200;
+  opacity: 0;
+  transition: opacity .25s, transform .25s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.empty { text-align: center; color: #aaa; padding: 40px 20px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>&#9889; MQTT Scheduler</h1>
+  <span class="mqtt-badge" id="mqttBadge">MQTT...</span>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('scenes', this)">Scenes</button>
+  <button onclick="showTab('macros', this)">Macros</button>
+  <button onclick="showTab('log', this)">Activity Log</button>
+  <button onclick="showTab('settings', this)">Settings</button>
+  <button onclick="showTab('help', this)">Help</button>
+</nav>
+
+<!-- SCENES -->
+<div class="tab active" id="tab-scenes">
+  <div class="scene-toolbar">
+    <button class="btn btn-primary" onclick="openModal()">+ New Scene</button>
+  </div>
+  <div id="sceneList"><div class="empty">Loading...</div></div>
+</div>
+
+<!-- MACROS -->
+<div class="tab" id="tab-macros">
+  <div class="scene-toolbar">
+    <button class="btn btn-primary" onclick="openMacroModal()">+ New Macro</button>
+  </div>
+  <div id="macroList"><div class="empty">Loading...</div></div>
+</div>
+
+<!-- LOG -->
+<div class="tab" id="tab-log">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <span style="font-size:13px;color:#888">Last 100 events</span>
+    <button class="btn btn-muted btn-sm" onclick="loadLog()">&#8635; Refresh</button>
+  </div>
+  <div class="log-wrap">
+    <table class="log-table">
+      <thead><tr>
+        <th>Time</th><th>Scene</th><th>Status</th><th>Detail</th><th>Event ID</th>
+      </tr></thead>
+      <tbody id="logBody"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="tab" id="tab-settings">
+  <div class="settings-card">
+    <h2>MQTT Broker</h2>
+    <div class="grid2">
+      <div class="fg"><label>Host</label><input id="s_mqtt_host" placeholder="192.168.10.1"></div>
+      <div class="fg"><label>Port</label><input id="s_mqtt_port" type="number" placeholder="1883"></div>
+    </div>
+    <div class="grid2">
+      <div class="fg"><label>Username (optional)</label><input id="s_mqtt_user"></div>
+      <div class="fg"><label>Password (optional)</label><input id="s_mqtt_pass" type="password"></div>
+    </div>
+  </div>
+  <div class="settings-card">
+    <h2>Google Calendar</h2>
+    <div class="fg"><label>Calendar ID</label><input id="s_calendar_id" placeholder="xxxx@group.calendar.google.com"></div>
+    <div class="grid2">
+      <div class="fg"><label>Check Ahead (minutes)</label><input id="s_check_ahead" type="number" min="1" max="60" placeholder="5"></div>
+      <div class="fg"><label>Max Offset (hours)</label><input id="s_max_offset" type="number" min="1" max="24" placeholder="4" title="Maximum +/- offset used in descriptions, e.g. -240 START: needs 4h here"></div>
+    </div>
+    <div class="fg"><label>Timezone</label><input id="s_timezone" placeholder="Australia/Sydney"></div>
+    <div class="fg">
+      <label>Valid Event Titles <span style="font-weight:400;color:#aaa">— one per line, case-insensitive. Leave blank to process all events.</span></label>
+      <textarea id="s_valid_titles" rows="5" style="width:100%;border:1px solid #ccc;border-radius:6px;padding:8px 10px;font-size:14px;resize:vertical" placeholder="Sunday Meeting&#10;Wednesday Meeting&#10;Fast&#10;Open Night"></textarea>
+    </div>
+  </div>
+  <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+</div>
+
+<!-- Scene Modal -->
+<div class="overlay" id="sceneModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="modalTitle">New Scene</h2>
+    <div class="fg">
+      <label>Scene Name</label>
+      <input id="m_name" placeholder="e.g. Sunday Morning">
+    </div>
+    <div class="fg">
+      <label>Description <span style="font-weight:400;color:#aaa">(optional)</span></label>
+      <input id="m_desc">
+    </div>
+    <div class="fg">
+      <label>Colour</label>
+      <div class="color-row">
+        <input id="m_color" type="color" value="#1a73e8">
+        <span style="font-size:12px;color:#888">Shown as the card accent</span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-muted" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveScene()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Macro Modal -->
+<div class="overlay" id="macroModal" onclick="if(event.target===this)closeMacroModal()">
+  <div class="modal">
+    <h2 id="macroModalTitle">New Macro</h2>
+    <div class="fg">
+      <label>Macro Name</label>
+      <input id="mm_name" placeholder="e.g. Standard, Main Hall Only">
+    </div>
+    <div class="fg">
+      <label>Description <span style="font-weight:400;color:#aaa">(optional)</span></label>
+      <input id="mm_desc">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-muted" onclick="closeMacroModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMacro()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- HELP TAB -->
+<div class="tab" id="tab-help">
+  <div class="settings-card">
+    <h2>What is MQTT Scheduler?</h2>
+    <p style="margin-bottom:10px">MQTT Scheduler watches a Google Calendar and automatically publishes MQTT messages at the start and end times of calendar events. Each event's description lists <strong>scenes</strong> to run — a scene is a named set of MQTT topic/payload pairs defined in this app.</p>
+    <p>The green badge in the top-right shows whether the MQTT broker is reachable. Red means the Pi cannot currently connect to the broker.</p>
+  </div>
+
+  <div class="settings-card">
+    <h2>Scenes</h2>
+    <p style="margin-bottom:8px">A <strong>scene</strong> is a named group of MQTT actions. Each action has:</p>
+    <ul style="margin-left:18px;margin-bottom:10px;line-height:1.8">
+      <li><strong>Topic</strong> — the MQTT topic to publish to (e.g. <code>home/lights/main</code>)</li>
+      <li><strong>Payload</strong> — the message to send (e.g. <code>ON</code>, <code>255</code>, <code>{"state":"on"}</code>)</li>
+      <li><strong>Delay (s)</strong> — seconds to wait before this action runs (useful for staggering)</li>
+      <li><strong>Order</strong> — actions run lowest-order first within a scene</li>
+    </ul>
+    <p>Use the <strong>▶ Run</strong> button on any scene to trigger it immediately for testing.</p>
+  </div>
+
+  <div class="settings-card">
+    <h2>Calendar Event Descriptions</h2>
+    <p style="margin-bottom:10px">Add scene triggers to a Google Calendar event by putting them in the event's <strong>description</strong>, one per line. Any line that doesn't match the format is ignored, so you can still include notes.</p>
+
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
+      <thead>
+        <tr style="background:#f6f8fa">
+          <th style="text-align:left;padding:8px 10px;border-bottom:2px solid #eaecef">Format</th>
+          <th style="text-align:left;padding:8px 10px;border-bottom:2px solid #eaecef">When it runs</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-family:monospace">START:Sunday Morning</td><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">Exactly at event start time</td></tr>
+        <tr><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-family:monospace">END:Sunday Shutdown</td><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">Exactly at event end time</td></tr>
+        <tr><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-family:monospace">-30 START:Pre-service Setup</td><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">30 minutes <em>before</em> event start</td></tr>
+        <tr><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-family:monospace">+15 END:Cleanup</td><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">15 minutes <em>after</em> event end</td></tr>
+        <tr><td style="padding:7px 10px;font-family:monospace">-240 START:HVAC Preheat</td><td style="padding:7px 10px">4 hours before event start</td></tr>
+      </tbody>
+    </table>
+
+    <p style="margin-bottom:6px">Scene names are <strong>case-insensitive</strong> — <code>sunday morning</code> and <code>Sunday Morning</code> both match the same scene.</p>
+    <p style="margin-bottom:6px">Once a trigger runs, its line is marked <strong>✓</strong> in the calendar description so it never runs twice, even if the poller checks again.</p>
+    <p>A full example description:</p>
+    <pre style="background:#f6f8fa;border:1px solid #eaecef;border-radius:6px;padding:12px;font-size:13px;margin-top:8px;overflow-x:auto">-30 START:HVAC Preheat
+START:Sunday Morning
+END:Sunday Shutdown
++10 END:HVAC Off</pre>
+  </div>
+
+  <div class="settings-card">
+    <h2>Macros</h2>
+    <p style="margin-bottom:8px">A <strong>macro</strong> is a named group of scene triggers — each entry specifies a trigger type (START or END), an offset in minutes, and a scene name. Instead of listing every scene individually in a calendar event, you put a single macro reference and it expands automatically.</p>
+    <p style="margin-bottom:10px">Calendar syntax:</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
+      <thead>
+        <tr style="background:#f6f8fa">
+          <th style="text-align:left;padding:8px 10px;border-bottom:2px solid #eaecef">Format</th>
+          <th style="text-align:left;padding:8px 10px;border-bottom:2px solid #eaecef">What it does</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding:7px 10px;font-family:monospace">MACRO:Standard</td><td style="padding:7px 10px">Expands all entries (START and END) from the "Standard" macro</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-bottom:8px">When the poller first sees a <code>MACRO:</code> line it replaces it with all the macro's constituent trigger lines (e.g. <code>-30 START:HVAC Preheat</code>, <code>END:Sunday Shutdown</code>) directly in the calendar event description. Those lines then run and get ✓'d one by one as normal. The START/END on each macro entry determines which event time it fires relative to.</p>
+    <p style="margin-bottom:8px">Example — a macro called <strong>Standard</strong> with these entries:</p>
+    <pre style="background:#f6f8fa;border:1px solid #eaecef;border-radius:6px;padding:12px;font-size:13px;margin-bottom:10px">START  -30 min  HVAC Preheat
+START    0 min  Sunday Morning
+END      0 min  Sunday Shutdown
+END    +10 min  HVAC Off</pre>
+    <p style="margin-bottom:6px">A calendar event with just:</p>
+    <pre style="background:#f6f8fa;border:1px solid #eaecef;border-radius:6px;padding:12px;font-size:13px;margin-bottom:10px">MACRO:Standard</pre>
+    <p>…expands on first poll to:</p>
+    <pre style="background:#f6f8fa;border:1px solid #eaecef;border-radius:6px;padding:12px;font-size:13px">-30 START:HVAC Preheat
+START:Sunday Morning
+END:Sunday Shutdown
++10 END:HVAC Off</pre>
+  </div>
+
+  <div class="settings-card">
+    <h2>Valid Event Titles</h2>
+    <p style="margin-bottom:8px">The <strong>Valid Event Titles</strong> list in Settings acts as a filter — the poller only processes events whose title exactly matches one of the listed names (case-insensitive). Events with any other title are silently ignored.</p>
+    <p style="margin-bottom:8px">This allows multiple Pi instances to share the same Google Calendar without interfering:</p>
+    <ul style="margin-left:18px;margin-bottom:10px;line-height:1.8">
+      <li><strong>Church Pi</strong> — Valid titles: <code>Sunday Meeting</code>, <code>Wednesday Meeting</code>, <code>Fast</code>, <code>Open Night</code></li>
+      <li><strong>Camp Pi</strong> — Valid titles: <code>Camp Meeting</code>, <code>Supper</code>, <code>Camp Activity</code></li>
+    </ul>
+    <p>Leave the list <strong>empty</strong> to process every event in the calendar regardless of title.</p>
+  </div>
+
+  <div class="settings-card">
+    <h2>How the Poller Works</h2>
+    <ul style="margin-left:18px;line-height:2">
+      <li>Runs automatically every <strong>5 minutes</strong> via a cron job on this Pi</li>
+      <li>Fetches events from Google Calendar up to <em>Max Offset hours</em> ahead and behind</li>
+      <li>Finds any <code>START:</code> / <code>END:</code> lines whose calculated fire time falls in the next 5 minutes</li>
+      <li>Sleeps until the <strong>exact</strong> fire time, then publishes all MQTT actions in the scene</li>
+      <li>Updates the calendar event description with <strong>✓</strong> so it doesn't run again</li>
+    </ul>
+    <p style="margin-top:10px">Poller output is logged to <code>/home/pi/calcontrol/poller.log</code> on the Pi.</p>
+  </div>
+
+  <div class="settings-card">
+    <h2>Settings Reference</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:#f6f8fa">
+          <th style="text-align:left;padding:8px 10px;border-bottom:2px solid #eaecef">Setting</th>
+          <th style="text-align:left;padding:8px 10px;border-bottom:2px solid #eaecef">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:600">MQTT Host / Port</td><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">Address of your MQTT broker (default: 192.168.10.1:1883)</td></tr>
+        <tr><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:600">MQTT Username / Password</td><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">Leave blank if your broker has no authentication</td></tr>
+        <tr><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:600">Calendar ID</td><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">Found in Google Calendar → Settings → your calendar → Calendar ID</td></tr>
+        <tr><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:600">Check Ahead (minutes)</td><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">How far ahead to look for fire times each cron tick (default: 5, matches cron interval)</td></tr>
+        <tr><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0;font-weight:600">Max Offset (hours)</td><td style="padding:7px 10px;border-bottom:1px solid #f0f0f0">Set this to the largest offset you use in descriptions (e.g. 4 if you use <code>-240 START:</code>)</td></tr>
+        <tr><td style="padding:7px 10px;font-weight:600">Valid Event Titles</td><td style="padding:7px 10px">One title per line. Only events matching a title are processed. Blank = all events.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<datalist id="sceneNameList"></datalist>
+<div class="toast" id="toast"></div>
+
+<script>
+let scenes = [];
+let editingId = null;
+let openId = null;
+
+// --- Tabs ---
+function showTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'log') loadLog();
+  if (name === 'settings') loadSettings();
+  if (name === 'macros') loadMacros();
+}
+
+// --- Toast ---
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// --- MQTT status ---
+async function checkMqtt() {
+  try {
+    const d = await fetch('/api/mqtt/status').then(r => r.json());
+    const badge = document.getElementById('mqttBadge');
+    badge.textContent = d.connected ? 'MQTT Online' : 'MQTT Offline';
+    badge.className = 'mqtt-badge ' + (d.connected ? 'ok' : 'err');
+  } catch {}
+}
+
+// --- Scenes ---
+async function loadScenes() {
+  scenes = await fetch('/api/scenes').then(r => r.json());
+  renderScenes();
+  updateSceneDatalist();
+}
+
+function updateSceneDatalist() {
+  document.getElementById('sceneNameList').innerHTML =
+    scenes.map(s => `<option value="${x(s.name)}">`).join('');
+}
+
+function renderScenes() {
+  const el = document.getElementById('sceneList');
+  if (!scenes.length) {
+    el.innerHTML = '<div class="empty">No scenes yet. Create your first scene above.</div>';
+    return;
+  }
+  el.innerHTML = scenes.map(s => sceneCard(s)).join('');
+}
+
+function sceneCard(s) {
+  const isOpen = openId === s.id;
+  const actions = s.actions || [];
+  return `<div class="scene-card" style="border-left-color:${s.color}">
+  <div class="scene-header" onclick="toggleScene(${s.id})">
+    <div style="flex:1">
+      <div class="scene-name">${x(s.name)}</div>
+      ${s.description ? `<div class="scene-desc">${x(s.description)}</div>` : ''}
+    </div>
+    <div class="scene-btns" onclick="event.stopPropagation()">
+      <button class="btn btn-success btn-sm" onclick="fireScene(${s.id},'${x(s.name)}')">&#9654; Run</button>
+      <button class="btn btn-muted btn-sm" onclick="openModal(${s.id})">Edit</button>
+      <button class="btn btn-muted btn-sm" onclick="dupScene(${s.id})">Duplicate</button>
+      <button class="btn btn-danger btn-sm" onclick="delScene(${s.id},'${x(s.name)}')">Delete</button>
+    </div>
+    <span class="chevron ${isOpen ? 'open' : ''}">&#9660;</span>
+  </div>
+  <div class="scene-body ${isOpen ? 'open' : ''}">
+    <table class="actions-table">
+      <thead><tr>
+        <th style="width:20%">Description</th>
+        <th style="width:32%">MQTT Topic</th>
+        <th style="width:22%">Payload</th>
+        <th style="width:9%">Delay (s)</th>
+        <th style="width:7%">Order</th>
+        <th style="width:10%"></th>
+      </tr></thead>
+      <tbody>
+        ${actions.map(a => actionRow(s.id, a)).join('')}
+        <tr class="add-row">
+          <td><input type="text" id="ndesc_${s.id}" placeholder="optional label"></td>
+          <td><input type="text" id="nt_${s.id}" placeholder="home/lights/main"></td>
+          <td><input type="text" id="np_${s.id}" placeholder="ON"></td>
+          <td><input type="number" id="nd_${s.id}" value="0" step="0.5" style="width:60px"></td>
+          <td><input type="number" id="no_${s.id}" value="${actions.length}" style="width:50px"></td>
+          <td><button class="btn btn-primary btn-sm" onclick="addAction(${s.id})">+ Add</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>`;
+}
+
+function actionRow(sid, a) {
+  return `<tr id="ar_${a.id}">
+    <td><input type="text" value="${x(a.description||'')}" placeholder="optional label" onblur="saveAction(${sid},${a.id})"></td>
+    <td><input type="text" value="${x(a.topic)}" onblur="saveAction(${sid},${a.id})"></td>
+    <td><input type="text" value="${x(a.payload)}" onblur="saveAction(${sid},${a.id})"></td>
+    <td><input type="number" value="${a.delay_seconds}" step="0.5" style="width:60px" onblur="saveAction(${sid},${a.id})"></td>
+    <td><input type="number" value="${a.action_order}" style="width:50px" onblur="saveAction(${sid},${a.id})"></td>
+    <td><button class="btn btn-danger btn-sm" onclick="delAction(${sid},${a.id})">&#10005;</button></td>
+  </tr>`;
+}
+
+function toggleScene(id) {
+  openId = openId === id ? null : id;
+  renderScenes();
+}
+
+async function fireScene(id, name) {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const d = await fetch(`/api/scenes/${id}/fire`, { method: 'POST' }).then(r => r.json());
+    const ok = d.actions?.filter(a => a.status === 'ok').length ?? 0;
+    const err = d.actions?.filter(a => a.status === 'error').length ?? 0;
+    toast(`Ran "${name}" — ${ok} ok${err ? ', ' + err + ' errors' : ''}`);
+  } catch(e) {
+    toast('Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ Run';
+  }
+}
+
+async function delScene(id, name) {
+  if (!confirm(`Delete scene "${name}"? This will also delete all its actions.`)) return;
+  await fetch(`/api/scenes/${id}`, { method: 'DELETE' });
+  if (openId === id) openId = null;
+  toast(`Deleted "${name}"`);
+  loadScenes();
+}
+
+async function dupScene(id) {
+  const r = await fetch(`/api/scenes/${id}/duplicate`, { method: 'POST' });
+  const data = await r.json();
+  openId = data.id;
+  toast('Scene duplicated');
+  loadScenes();
+}
+
+// --- Scene modal ---
+function openModal(id = null) {
+  editingId = id;
+  document.getElementById('modalTitle').textContent = id ? 'Edit Scene' : 'New Scene';
+  if (id) {
+    const s = scenes.find(s => s.id === id);
+    document.getElementById('m_name').value = s.name;
+    document.getElementById('m_desc').value = s.description || '';
+    document.getElementById('m_color').value = s.color || '#1a73e8';
+  } else {
+    document.getElementById('m_name').value = '';
+    document.getElementById('m_desc').value = '';
+    document.getElementById('m_color').value = '#1a73e8';
+  }
+  document.getElementById('sceneModal').classList.add('open');
+  setTimeout(() => document.getElementById('m_name').focus(), 60);
+}
+
+function closeModal() {
+  document.getElementById('sceneModal').classList.remove('open');
+  editingId = null;
+}
+
+async function saveScene() {
+  const name = document.getElementById('m_name').value.trim();
+  if (!name) { alert('Scene name is required'); return; }
+  const body = {
+    name,
+    description: document.getElementById('m_desc').value.trim(),
+    color: document.getElementById('m_color').value
+  };
+  if (editingId) {
+    await fetch(`/api/scenes/${editingId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    toast('Scene updated');
+  } else {
+    const res = await fetch('/api/scenes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await res.json();
+    openId = d.id;
+    toast('Scene created');
+  }
+  closeModal();
+  loadScenes();
+}
+
+// --- Actions ---
+async function addAction(sid) {
+  const topic = document.getElementById(`nt_${sid}`).value.trim();
+  if (!topic) { alert('Topic is required'); return; }
+  const description = document.getElementById(`ndesc_${sid}`).value.trim();
+  const payload = document.getElementById(`np_${sid}`).value;
+  const delay = parseFloat(document.getElementById(`nd_${sid}`).value) || 0;
+  const order = parseInt(document.getElementById(`no_${sid}`).value) || 0;
+  await fetch(`/api/scenes/${sid}/actions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic, payload, delay_seconds: delay, action_order: order, description })
+  });
+  openId = sid;
+  toast('Action added');
+  loadScenes();
+}
+
+async function saveAction(sid, aid) {
+  const row = document.getElementById(`ar_${aid}`);
+  const inputs = row.querySelectorAll('input');
+  const topic = inputs[1].value.trim();
+  if (!topic) return;
+  await fetch(`/api/scenes/${sid}/actions/${aid}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description: inputs[0].value.trim(),
+      topic,
+      payload: inputs[2].value,
+      delay_seconds: parseFloat(inputs[3].value) || 0,
+      action_order: parseInt(inputs[4].value) || 0
+    })
+  });
+  toast('Saved');
+}
+
+async function delAction(sid, aid) {
+  if (!confirm('Delete this action?')) return;
+  await fetch(`/api/scenes/${sid}/actions/${aid}`, { method: 'DELETE' });
+  openId = sid;
+  toast('Action deleted');
+  loadScenes();
+}
+
+// --- Macros ---
+let macros = [];
+let editingMacroId = null;
+let openMacroId = null;
+
+async function loadMacros() {
+  if (!scenes.length) {
+    scenes = await fetch('/api/scenes').then(r => r.json());
+    updateSceneDatalist();
+  }
+  macros = await fetch('/api/macros').then(r => r.json());
+  renderMacros();
+}
+
+function renderMacros() {
+  const el = document.getElementById('macroList');
+  if (!macros.length) {
+    el.innerHTML = '<div class="empty">No macros yet. Create your first macro above.</div>';
+    return;
+  }
+  el.innerHTML = macros.map(m => macroCard(m)).join('');
+}
+
+function macroCard(m) {
+  const isOpen = openMacroId === m.id;
+  const entries = m.entries || [];
+  return `<div class="scene-card" style="border-left-color:#7b5ea7">
+  <div class="scene-header" onclick="toggleMacro(${m.id})">
+    <div style="flex:1">
+      <div class="scene-name">${x(m.name)}</div>
+      ${m.description ? `<div class="scene-desc">${x(m.description)}</div>` : ''}
+    </div>
+    <div class="scene-btns" onclick="event.stopPropagation()">
+      <button class="btn btn-muted btn-sm" onclick="openMacroModal(${m.id})">Edit</button>
+      <button class="btn btn-muted btn-sm" onclick="dupMacro(${m.id})">Duplicate</button>
+      <button class="btn btn-danger btn-sm" onclick="delMacro(${m.id},'${x(m.name)}')">Delete</button>
+    </div>
+    <span class="chevron ${isOpen ? 'open' : ''}">&#9660;</span>
+  </div>
+  <div class="scene-body ${isOpen ? 'open' : ''}">
+    <p style="font-size:12px;color:#888;margin-bottom:10px">
+      Calendar usage: <code>MACRO:${x(m.name)}</code>
+    </p>
+    <table class="actions-table">
+      <thead><tr>
+        <th style="width:14%">Trigger</th>
+        <th style="width:16%">Offset (min)</th>
+        <th style="width:44%">Scene Name</th>
+        <th style="width:10%">Order</th>
+        <th style="width:16%"></th>
+      </tr></thead>
+      <tbody>
+        ${entries.map(e => macroEntryRow(m.id, e)).join('')}
+        <tr class="add-row">
+          <td>
+            <select id="met_${m.id}" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px">
+              <option value="START">START</option>
+              <option value="END">END</option>
+            </select>
+          </td>
+          <td><input type="number" id="meo_${m.id}" value="0" style="width:70px;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px"></td>
+          <td><input type="text" id="mes_${m.id}" placeholder="Scene name" list="sceneNameList" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;font-family:monospace"></td>
+          <td><input type="number" id="meord_${m.id}" value="${entries.length}" style="width:50px;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px"></td>
+          <td><button class="btn btn-primary btn-sm" onclick="addMacroEntry(${m.id})">+ Add</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>`;
+}
+
+function macroEntryRow(mid, e) {
+  return `<tr id="mer_${e.id}">
+    <td>
+      <select onblur="saveMacroEntry(${mid},${e.id})" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px">
+        <option value="START" ${e.trigger==='START'?'selected':''}>START</option>
+        <option value="END" ${e.trigger==='END'?'selected':''}>END</option>
+      </select>
+    </td>
+    <td><input type="number" value="${e.offset_minutes}" style="width:70px;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px" onblur="saveMacroEntry(${mid},${e.id})"></td>
+    <td><input type="text" value="${x(e.scene_name)}" list="sceneNameList" style="width:100%;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px;font-family:monospace" onblur="saveMacroEntry(${mid},${e.id})"></td>
+    <td><input type="number" value="${e.entry_order}" style="width:50px;border:1px solid #ddd;border-radius:4px;padding:4px 6px;font-size:13px" onblur="saveMacroEntry(${mid},${e.id})"></td>
+    <td><button class="btn btn-danger btn-sm" onclick="delMacroEntry(${mid},${e.id})">&#10005;</button></td>
+  </tr>`;
+}
+
+function toggleMacro(id) {
+  openMacroId = openMacroId === id ? null : id;
+  renderMacros();
+}
+
+function openMacroModal(id = null) {
+  editingMacroId = id;
+  document.getElementById('macroModalTitle').textContent = id ? 'Edit Macro' : 'New Macro';
+  if (id) {
+    const m = macros.find(m => m.id === id);
+    document.getElementById('mm_name').value = m.name;
+    document.getElementById('mm_desc').value = m.description || '';
+  } else {
+    document.getElementById('mm_name').value = '';
+    document.getElementById('mm_desc').value = '';
+  }
+  document.getElementById('macroModal').classList.add('open');
+  setTimeout(() => document.getElementById('mm_name').focus(), 60);
+}
+
+function closeMacroModal() {
+  document.getElementById('macroModal').classList.remove('open');
+  editingMacroId = null;
+}
+
+async function saveMacro() {
+  const name = document.getElementById('mm_name').value.trim();
+  if (!name) { alert('Macro name is required'); return; }
+  const body = { name, description: document.getElementById('mm_desc').value.trim() };
+  if (editingMacroId) {
+    await fetch(`/api/macros/${editingMacroId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    toast('Macro updated');
+  } else {
+    const res = await fetch('/api/macros', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await res.json();
+    openMacroId = d.id;
+    toast('Macro created');
+  }
+  closeMacroModal();
+  loadMacros();
+}
+
+async function delMacro(id, name) {
+  if (!confirm(`Delete macro "${name}" and all its entries?`)) return;
+  await fetch(`/api/macros/${id}`, { method: 'DELETE' });
+  if (openMacroId === id) openMacroId = null;
+  toast(`Deleted "${name}"`);
+  loadMacros();
+}
+
+async function dupMacro(id) {
+  const r = await fetch(`/api/macros/${id}/duplicate`, { method: 'POST' });
+  const data = await r.json();
+  openMacroId = data.id;
+  toast('Macro duplicated');
+  loadMacros();
+}
+
+async function addMacroEntry(mid) {
+  const scene = document.getElementById(`mes_${mid}`).value.trim();
+  if (!scene) { alert('Scene name is required'); return; }
+  const trigger = document.getElementById(`met_${mid}`).value;
+  const offset = parseInt(document.getElementById(`meo_${mid}`).value) || 0;
+  const order = parseInt(document.getElementById(`meord_${mid}`).value) || 0;
+  await fetch(`/api/macros/${mid}/entries`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trigger, offset_minutes: offset, scene_name: scene, entry_order: order })
+  });
+  openMacroId = mid;
+  toast('Entry added');
+  loadMacros();
+}
+
+async function saveMacroEntry(mid, eid) {
+  const row = document.getElementById(`mer_${eid}`);
+  const sel = row.querySelector('select');
+  const inputs = row.querySelectorAll('input');
+  const scene = inputs[1].value.trim();
+  if (!scene) return;
+  await fetch(`/api/macros/${mid}/entries/${eid}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      trigger: sel.value,
+      offset_minutes: parseInt(inputs[0].value) || 0,
+      scene_name: scene,
+      entry_order: parseInt(inputs[2].value) || 0
+    })
+  });
+  toast('Saved');
+}
+
+async function delMacroEntry(mid, eid) {
+  if (!confirm('Delete this entry?')) return;
+  await fetch(`/api/macros/${mid}/entries/${eid}`, { method: 'DELETE' });
+  openMacroId = mid;
+  toast('Entry deleted');
+  loadMacros();
+}
+
+// --- Log ---
+async function loadLog() {
+  const rows = await fetch('/api/log?limit=100').then(r => r.json());
+  const tbody = document.getElementById('logBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No events yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td style="white-space:nowrap;font-size:12px">${r.fired_at || ''}</td>
+    <td><strong>${x(r.scene_name || '')}</strong></td>
+    <td class="${r.status === 'ok' ? 'ok' : 'err'}">${r.status}</td>
+    <td class="mono">${x(r.note || '')}</td>
+    <td class="mono">${x((r.google_event_id || 'manual').substring(0, 16))}${(r.google_event_id||'').length > 16 ? '…' : ''}</td>
+  </tr>`).join('');
+}
+
+// --- Settings ---
+async function loadSettings() {
+  const s = await fetch('/api/settings').then(r => r.json());
+  document.getElementById('s_mqtt_host').value = s.mqtt_host || '';
+  document.getElementById('s_mqtt_port').value = s.mqtt_port || '';
+  document.getElementById('s_mqtt_user').value = s.mqtt_user || '';
+  document.getElementById('s_mqtt_pass').value = '';
+  document.getElementById('s_calendar_id').value = s.calendar_id || '';
+  document.getElementById('s_check_ahead').value = s.check_ahead_minutes || '5';
+  document.getElementById('s_max_offset').value = s.max_offset_hours || '4';
+  document.getElementById('s_timezone').value = s.timezone || '';
+  document.getElementById('s_valid_titles').value = s.valid_titles || '';
+}
+
+async function saveSettings() {
+  const body = {
+    mqtt_host: document.getElementById('s_mqtt_host').value.trim(),
+    mqtt_port: document.getElementById('s_mqtt_port').value.trim(),
+    mqtt_user: document.getElementById('s_mqtt_user').value.trim(),
+    calendar_id: document.getElementById('s_calendar_id').value.trim(),
+    check_ahead_minutes: document.getElementById('s_check_ahead').value.trim(),
+    max_offset_hours: document.getElementById('s_max_offset').value.trim(),
+    timezone: document.getElementById('s_timezone').value.trim(),
+    valid_titles: document.getElementById('s_valid_titles').value,
+  };
+  const pass = document.getElementById('s_mqtt_pass').value;
+  if (pass) body.mqtt_pass = pass;
+  await fetch('/api/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  toast('Settings saved');
+  checkMqtt();
+}
+
+// --- Utils ---
+function x(s) {
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// --- Init ---
+checkMqtt();
+loadScenes();
+setInterval(checkMqtt, 30000);
+</script>
+</body>
+</html>
