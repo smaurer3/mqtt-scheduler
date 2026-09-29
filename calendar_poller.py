@@ -264,7 +264,7 @@ def collect_triggers(events, now, check_ahead_dt, valid_titles=None):
 
             fire_time = base_time + timedelta(minutes=offset_min)
 
-            if now <= fire_time <= check_ahead_dt:
+            if fire_time <= check_ahead_dt:
                 triggers.append({
                     'fire_time': fire_time,
                     'trigger': trigger,
@@ -342,9 +342,9 @@ def main():
             print(f"  Waiting {delay:.1f}s until {local_time} to fire [{t['trigger']}] '{t['scene_name']}'...")
             time.sleep(delay)
 
+        mark_line_done(service, calendar_id, t['event_id'], t['original_line'])
         print(f"  Firing [{t['trigger']}] '{t['scene_name']}'")
         fire_scene(t['scene_name'], t['event_id'], t['trigger'], mqtt_host, mqtt_port, auth)
-        mark_line_done(service, calendar_id, t['event_id'], t['original_line'])
 
     print("Done.")
 
