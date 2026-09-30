@@ -111,7 +111,7 @@ def get_credentials():
                 sys.exit(1)
             flow = InstalledAppFlow.from_client_secrets_file(SECRETS_FILE, SCOPES)
             # Headless auth via SSH port forward:
-            #   ssh -L 8090:localhost:8090 pi@192.168.10.213  (separate terminal)
+            #   ssh -L 8090:localhost:8090 <user>@<pi-ip>  (separate terminal)
             # then visit the printed URL in your Windows browser.
             creds = flow.run_local_server(port=8090, open_browser=False)
         TOKEN_FILE.write_text(creds.to_json())
@@ -283,7 +283,7 @@ def main():
     settings = get_settings()
     calendar_id = settings.get('calendar_id', '').strip()
     if not calendar_id:
-        print("ERROR: No calendar_id configured. Set it via the web UI at http://192.168.10.213:8082")
+        print("ERROR: No calendar_id configured. Set it in Settings in the web UI (port 8082 on this host)")
         sys.exit(1)
 
     check_ahead = int(settings.get('check_ahead_minutes', 5))
