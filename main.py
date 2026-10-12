@@ -194,7 +194,7 @@ def create_macro_ep(body: MacroIn):
 @app.put('/api/macros/{macro_id}')
 def update_macro_ep(macro_id: int, body: MacroIn):
     if not get_macro(macro_id):
-        raise HTTPException(status_code=404, detail='Macro not found')
+        raise HTTPException(status_code=404, detail='Template not found')
     update_macro(macro_id, body.name, body.description)
     return {'ok': True}
 
@@ -202,7 +202,7 @@ def update_macro_ep(macro_id: int, body: MacroIn):
 def duplicate_macro_ep(macro_id: int):
     macro = get_macro(macro_id)
     if not macro:
-        raise HTTPException(status_code=404, detail='Macro not found')
+        raise HTTPException(status_code=404, detail='Template not found')
     new_id = create_macro(macro['name'] + ' Copy', macro['description'])
     for e in get_macro_entries(macro_id):
         add_macro_entry(new_id, e['trigger'], e['offset_minutes'], e['scene_name'], e['entry_order'])
@@ -211,7 +211,7 @@ def duplicate_macro_ep(macro_id: int):
 @app.delete('/api/macros/{macro_id}')
 def delete_macro_ep(macro_id: int):
     if not get_macro(macro_id):
-        raise HTTPException(status_code=404, detail='Macro not found')
+        raise HTTPException(status_code=404, detail='Template not found')
     delete_macro(macro_id)
     return {'ok': True}
 

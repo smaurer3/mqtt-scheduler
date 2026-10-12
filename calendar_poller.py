@@ -172,7 +172,7 @@ def mark_line_done(service, calendar_id, event_id, original_line):
 
 
 def expand_macros(service, calendar_id, events):
-    """Replace MACRO START/END lines with their constituent trigger lines in-place."""
+    """Replace TEMPLATE: (or the older MACRO:) lines with their constituent trigger lines in-place."""
     for event in events:
         description = event.get('description', '') or ''
         lines = description.splitlines()
@@ -183,26 +183,26 @@ def expand_macros(service, calendar_id, events):
             if stripped.startswith('✓'):
                 new_lines.append(line)
                 continue
-            m = re.match(r'^MACRO:\s*(.+)', stripped, re.IGNORECASE)
+            m = re.match(r'^(?:TEMPLATE|MACRO):\s*(.+)', stripped, re.IGNORECASE)
             if not m:
                 new_lines.append(line)
                 continue
             macro_name = m.group(1).strip()
             macro = get_macro_by_name(macro_name)
             if not macro:
-                print(f"  WARNING: Macro '{macro_name}' not found — leaving line as-is")
+                print(f"  WARNING: Template '{macro_name}' not found — leaving line as-is")
                 new_lines.append(line)
                 continue
             entries = get_macro_entries(macro['id'])
             if not entries:
-                print(f"  WARNING: Macro '{macro_name}' has no entries — skipping line")
+                print(f"  WARNING: Template '{macro_name}' has no entries — skipping line")
                 new_lines.append(line)
                 continue
             for entry in entries:
                 offset = entry['offset_minutes']
                 prefix = f"{offset:+d} " if offset != 0 else ""
                 new_lines.append(f"{prefix}{entry['trigger']}:{entry['scene_name']}")
-            print(f"  Expanded MACRO:{macro_name} → {len(entries)} trigger(s)")
+            print(f"  Expanded TEMPLATE:{macro_name} → {len(entries)} trigger(s)")
             changed = True
 
         if changed:
@@ -212,7 +212,7 @@ def expand_macros(service, calendar_id, events):
                 ev['description'] = event['description']
                 service.events().update(calendarId=calendar_id, eventId=event['id'], body=ev).execute()
             except Exception as e:
-                print(f"  WARNING: Could not write macro expansion to calendar: {e}")
+                print(f"  WARNING: Could not write template expansion to calendar: {e}")
 
 
 def collect_triggers(events, now, check_ahead_dt, valid_titles=None):

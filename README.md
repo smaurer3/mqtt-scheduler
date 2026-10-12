@@ -7,7 +7,7 @@ Originally built to drive church AV/lighting/HVAC automation from calendar invit
 ## Features
 
 - Web UI to define **Scenes** (groups of MQTT topic/payload actions, with optional per-action delay and ordering)
-- **Macros** — named groups of scene triggers (with their own offsets) that expand from a single `MACRO:Name` line in a calendar description
+- **Templates** — named groups of scene triggers (with their own offsets) that expand from a single `TEMPLATE:Name` line in a calendar description (the older `MACRO:Name` form still works)
 - Fires at the **exact** start/end time of the event, not just "sometime in the next 5 minutes"
 - **Valid Event Titles** filter, so multiple instances can share one calendar without interfering
 - Activity log of everything that's fired
@@ -42,15 +42,15 @@ END:Sunday Shutdown
 +10 END:HVAC Off
 ```
 
-### Macros
+### Templates
 
-A macro is a named group of scene triggers — each entry has its own trigger type (START/END), offset in minutes, and scene name. Instead of listing every scene in the calendar event, reference one macro:
+A template is a named group of scene triggers — each entry has its own trigger type (START/END), offset in minutes, and scene name. Instead of listing every scene in the calendar event, reference one template:
 
 ```
-MACRO:Standard
+TEMPLATE:Standard
 ```
 
-The poller expands this in-place into the macro's individual trigger lines (e.g. `-30 START:HVAC Preheat`, `END:Sunday Shutdown`) directly in the calendar event description the first time it sees the line. Those expanded lines then run and get `✓`'d one by one as normal.
+The poller expands this in-place into the template's individual trigger lines (e.g. `-30 START:HVAC Preheat`, `END:Sunday Shutdown`) directly in the calendar event description the first time it sees the line. Those expanded lines then run and get `✓`'d one by one as normal. The keyword and the template name are case-insensitive, and the space after the colon is optional (`template:standard` works). `MACRO:` is accepted as an older spelling of `TEMPLATE:`.
 
 ### Valid Event Titles
 
@@ -143,10 +143,10 @@ sudo systemctl enable --now calcontrol
 
 | File | Purpose |
 |---|---|
-| `main.py` | FastAPI web app — scene/macro/settings CRUD, manual scene fire, MQTT status endpoint |
+| `main.py` | FastAPI web app — scene/template/settings CRUD, manual scene fire, MQTT status endpoint |
 | `database.py` | SQLite schema and data access layer |
-| `calendar_poller.py` | Cron script — polls Google Calendar, expands macros, fires scenes at exact times |
-| `static/index.html` | Single-page web UI (Scenes, Macros, Activity Log, Settings, Help) |
+| `calendar_poller.py` | Cron script — polls Google Calendar, expands templates, fires scenes at exact times |
+| `static/index.html` | Single-page web UI (Scenes, Templates, Activity Log, Settings, Help) |
 | `calcontrol.service` | Example systemd unit for the web app |
 | `requirements.txt` | Python dependencies |
 

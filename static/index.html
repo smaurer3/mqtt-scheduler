@@ -244,7 +244,7 @@ nav button:hover:not(.active) { color: #333; background: #f8f8f8; }
 
 <nav>
   <button class="active" onclick="showTab('scenes', this)">Scenes</button>
-  <button onclick="showTab('macros', this)">Macros</button>
+  <button onclick="showTab('macros', this)">Templates</button>
   <button onclick="showTab('log', this)">Activity Log</button>
   <button onclick="showTab('settings', this)">Settings</button>
   <button onclick="showTab('help', this)">Help</button>
@@ -261,7 +261,7 @@ nav button:hover:not(.active) { color: #333; background: #f8f8f8; }
 <!-- MACROS -->
 <div class="tab" id="tab-macros">
   <div class="scene-toolbar">
-    <button class="btn btn-primary" onclick="openMacroModal()">+ New Macro</button>
+    <button class="btn btn-primary" onclick="openMacroModal()">+ New Template</button>
   </div>
   <div id="macroList"><div class="empty">Loading...</div></div>
 </div>
@@ -340,9 +340,9 @@ nav button:hover:not(.active) { color: #333; background: #f8f8f8; }
 <!-- Macro Modal -->
 <div class="overlay" id="macroModal" onclick="if(event.target===this)closeMacroModal()">
   <div class="modal">
-    <h2 id="macroModalTitle">New Macro</h2>
+    <h2 id="macroModalTitle">New Template</h2>
     <div class="fg">
-      <label>Macro Name</label>
+      <label>Template Name</label>
       <input id="mm_name" placeholder="e.g. Standard, Main Hall Only">
     </div>
     <div class="fg">
@@ -406,8 +406,8 @@ END:Sunday Shutdown
   </div>
 
   <div class="settings-card">
-    <h2>Macros</h2>
-    <p style="margin-bottom:8px">A <strong>macro</strong> is a named group of scene triggers — each entry specifies a trigger type (START or END), an offset in minutes, and a scene name. Instead of listing every scene individually in a calendar event, you put a single macro reference and it expands automatically.</p>
+    <h2>Templates</h2>
+    <p style="margin-bottom:8px">A <strong>template</strong> is a named group of scene triggers — each entry specifies a trigger type (START or END), an offset in minutes, and a scene name. Instead of listing every scene individually in a calendar event, you put a single template reference and it expands automatically. (The older <code>MACRO:</code> word still works exactly the same.)</p>
     <p style="margin-bottom:10px">Calendar syntax:</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
       <thead>
@@ -417,17 +417,17 @@ END:Sunday Shutdown
         </tr>
       </thead>
       <tbody>
-        <tr><td style="padding:7px 10px;font-family:monospace">MACRO:Standard</td><td style="padding:7px 10px">Expands all entries (START and END) from the "Standard" macro</td></tr>
+        <tr><td style="padding:7px 10px;font-family:monospace">TEMPLATE:Standard</td><td style="padding:7px 10px">Expands all entries (START and END) from the "Standard" template. Capital letters and the space after the colon don't matter.</td></tr>
       </tbody>
     </table>
-    <p style="margin-bottom:8px">When the poller first sees a <code>MACRO:</code> line it replaces it with all the macro's constituent trigger lines (e.g. <code>-30 START:HVAC Preheat</code>, <code>END:Sunday Shutdown</code>) directly in the calendar event description. Those lines then run and get ✓'d one by one as normal. The START/END on each macro entry determines which event time it fires relative to.</p>
-    <p style="margin-bottom:8px">Example — a macro called <strong>Standard</strong> with these entries:</p>
+    <p style="margin-bottom:8px">When the poller first sees a <code>TEMPLATE:</code> line it replaces it with all the template's constituent trigger lines (e.g. <code>-30 START:HVAC Preheat</code>, <code>END:Sunday Shutdown</code>) directly in the calendar event description. Those lines then run and get ✓'d one by one as normal. The START/END on each template entry determines which event time it fires relative to.</p>
+    <p style="margin-bottom:8px">Example — a template called <strong>Standard</strong> with these entries:</p>
     <pre style="background:#f6f8fa;border:1px solid #eaecef;border-radius:6px;padding:12px;font-size:13px;margin-bottom:10px">START  -30 min  HVAC Preheat
 START    0 min  Sunday Morning
 END      0 min  Sunday Shutdown
 END    +10 min  HVAC Off</pre>
     <p style="margin-bottom:6px">A calendar event with just:</p>
-    <pre style="background:#f6f8fa;border:1px solid #eaecef;border-radius:6px;padding:12px;font-size:13px;margin-bottom:10px">MACRO:Standard</pre>
+    <pre style="background:#f6f8fa;border:1px solid #eaecef;border-radius:6px;padding:12px;font-size:13px;margin-bottom:10px">TEMPLATE:Standard</pre>
     <p>…expands on first poll to:</p>
     <pre style="background:#f6f8fa;border:1px solid #eaecef;border-radius:6px;padding:12px;font-size:13px">-30 START:HVAC Preheat
 START:Sunday Morning
@@ -741,7 +741,7 @@ async function loadMacros() {
 function renderMacros() {
   const el = document.getElementById('macroList');
   if (!macros.length) {
-    el.innerHTML = '<div class="empty">No macros yet. Create your first macro above.</div>';
+    el.innerHTML = '<div class="empty">No templates yet. Create your first template above.</div>';
     return;
   }
   el.innerHTML = macros.map(m => macroCard(m)).join('');
@@ -765,7 +765,7 @@ function macroCard(m) {
   </div>
   <div class="scene-body ${isOpen ? 'open' : ''}">
     <p style="font-size:12px;color:#888;margin-bottom:10px">
-      Calendar usage: <code>MACRO:${x(m.name)}</code>
+      Calendar usage: <code>TEMPLATE:${x(m.name)}</code>
     </p>
     <table class="actions-table">
       <thead><tr>
@@ -837,14 +837,14 @@ function closeMacroModal() {
 
 async function saveMacro() {
   const name = document.getElementById('mm_name').value.trim();
-  if (!name) { alert('Macro name is required'); return; }
+  if (!name) { alert('Template name is required'); return; }
   const body = { name, description: document.getElementById('mm_desc').value.trim() };
   if (editingMacroId) {
     await fetch(`/api/macros/${editingMacroId}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-    toast('Macro updated');
+    toast('Template updated');
   } else {
     const res = await fetch('/api/macros', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -852,14 +852,14 @@ async function saveMacro() {
     });
     const d = await res.json();
     openMacroId = d.id;
-    toast('Macro created');
+    toast('Template created');
   }
   closeMacroModal();
   loadMacros();
 }
 
 async function delMacro(id, name) {
-  if (!confirm(`Delete macro "${name}" and all its entries?`)) return;
+  if (!confirm(`Delete template "${name}" and all its entries?`)) return;
   await fetch(`/api/macros/${id}`, { method: 'DELETE' });
   if (openMacroId === id) openMacroId = null;
   toast(`Deleted "${name}"`);
@@ -870,7 +870,7 @@ async function dupMacro(id) {
   const r = await fetch(`/api/macros/${id}/duplicate`, { method: 'POST' });
   const data = await r.json();
   openMacroId = data.id;
-  toast('Macro duplicated');
+  toast('Template duplicated');
   loadMacros();
 }
 
